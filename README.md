@@ -121,7 +121,7 @@ pip install -r requirements.txt
 #### Passo 2: Configurar Aplicação
 - **App name:** `Spotify to YouTube Transfer`
 - **App description:** `Transfer playlists to YouTube Music`
-- **Redirect URI:** `http://127.0.0.1:8080/callback` ⚠️ **IMPORTANTE!**
+- **Redirect URI:** `http://localhost:8080/callback` ⚠️ **IMPORTANTE!**
 - **APIs/SDKs:** Selecione **Web API**
 
 #### Passo 3: Obter Credenciais
@@ -239,7 +239,7 @@ nano .env  # ou use seu editor favorito
 ```env
 SPOTIFY_CLIENT_ID=seu_client_id_aqui
 SPOTIFY_CLIENT_SECRET=seu_client_secret_aqui
-SPOTIFY_REDIRECT_URI=http://127.0.0.1:8080/callback
+SPOTIFY_REDIRECT_URI=http://localhost:8080/callback
 ```
 
 ---
@@ -324,7 +324,7 @@ Spotify to Youtube/
 **Solução:** Adicione seu email em **"Público-alvo"** (Audience) no Google Cloud Console OAuth consent screen
 
 ### ❌ "INVALID_CLIENT: Insecure redirect URI"
-**Solução:** Use `http://127.0.0.1:8080/callback` (não `localhost` ou `https`) no Spotify Dashboard
+**Solução:** Use `http://localhost:8080/callback` (não `https`) no Spotify Dashboard
 
 ### ❌ "Address already in use" (porta 8080)
 **Solução:** A porta está ocupada. Mude para 8081 no `.env` e no Spotify Dashboard
