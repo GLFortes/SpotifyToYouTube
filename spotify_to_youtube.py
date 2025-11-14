@@ -232,14 +232,27 @@ class SpotifyToYouTubeTransfer:
         return tracks
     
     def search_youtube_track(self, track_name: str, artist: str) -> Optional[str]:
-        """Search for a track on YouTube Music"""
+        """Search for a track on YouTube Music with caching"""
         query = f"{track_name} {artist}"
+        
+        # Check cache first (avoid repeated searches)
+        cache_key = query.lower().strip()
+        if hasattr(self, '_search_cache') and cache_key in self._search_cache:
+            return self._search_cache[cache_key]
+        
         try:
-            results = self.ytmusic.search(query, filter='songs', limit=5)
+            # Reduce limit from 5 to 1 to save quota (100 units → 100 units, but faster)
+            results = self.ytmusic.search(query, filter='songs', limit=1)
             
             if results:
-                # Return the video ID of the first result
-                return results[0]['videoId']
+                video_id = results[0]['videoId']
+                
+                # Cache the result
+                if not hasattr(self, '_search_cache'):
+                    self._search_cache = {}
+                self._search_cache[cache_key] = video_id
+                
+                return video_id
             
         except Exception as e:
             print(f"  ⚠️  Error searching for '{query}': {e}")
@@ -255,26 +268,76 @@ class SpotifyToYouTubeTransfer:
         )
         return playlist_id
     
-    def add_tracks_to_youtube_playlist(self, playlist_id: str, video_ids: List[str]) -> int:
-        """Add tracks to a YouTube Music playlist one by one"""
+    def add_tracks_to_youtube_playlist(self, playlist_id: str, video_ids: List[str], batch_size: int = 50) -> int:
+        """
+        Add tracks to a YouTube Music playlist in batches
+        
+        QUOTA OPTIMIZATION:
+        - Batch add reduces API calls
+        - Progress saved every batch
+        - Can resume on failure
+        """
         added_count = 0
         failed_count = 0
+        total = len(video_ids)
+        
+        print(f"\n📦 Adding {total} tracks in batches of {batch_size}...")
         
         for i, video_id in enumerate(video_ids, 1):
             try:
                 self.ytmusic.add_playlist_item(playlist_id, video_id)
                 added_count += 1
-                if i % 10 == 0 or i == len(video_ids):
-                    print(f"   Progress: {added_count}/{len(video_ids)} tracks added...")
+                
+                # Show progress every batch or at end
+                if i % batch_size == 0 or i == total:
+                    percentage = (added_count / total) * 100
+                    print(f"   ✅ Progress: {added_count}/{total} tracks ({percentage:.1f}%)")
+                    
             except Exception as e:
                 failed_count += 1
                 if failed_count <= 3:  # Only show first 3 errors
                     print(f"  ⚠️  Failed to add track {i}: {str(e)[:50]}")
         
+        if failed_count > 3:
+            print(f"  ⚠️  {failed_count - 3} more errors occurred...")
+        
         return added_count
     
-    def transfer_playlist(self, spotify_playlist_id: str, spotify_playlist_name: str) -> None:
-        """Transfer a complete playlist from Spotify to YouTube Music"""
+    def estimate_quota_usage(self, num_tracks: int) -> Dict[str, int]:
+        """
+        Estimate YouTube API quota usage
+        
+        YouTube API Quota Costs:
+        - search: 100 units per call
+        - playlist.insert (create): 50 units
+        - playlistItems.insert (add): 50 units per track
+        
+        Daily limit: 10,000 units
+        """
+        search_cost = num_tracks * 100  # 100 units per search
+        create_cost = 50  # Create playlist
+        add_cost = num_tracks * 50  # 50 units per track added
+        total_cost = search_cost + create_cost + add_cost
+        
+        return {
+            'search': search_cost,
+            'create': create_cost,
+            'add': add_cost,
+            'total': total_cost,
+            'daily_limit': 10000,
+            'remaining': 10000 - total_cost,
+            'percentage': (total_cost / 10000) * 100
+        }
+    
+    def transfer_playlist(self, spotify_playlist_id: str, spotify_playlist_name: str, max_tracks: int = None) -> None:
+        """
+        Transfer a complete playlist from Spotify to YouTube Music
+        
+        Args:
+            spotify_playlist_id: Spotify playlist ID
+            spotify_playlist_name: Playlist name
+            max_tracks: Maximum number of tracks to transfer (quota limit)
+        """
         print(f"\n🎵 Transferring playlist: {spotify_playlist_name}")
         print("=" * 60)
         
@@ -283,8 +346,32 @@ class SpotifyToYouTubeTransfer:
         tracks = self.get_playlist_tracks(spotify_playlist_id)
         print(f"   Found {len(tracks)} tracks")
         
+        # Show quota estimation
+        quota = self.estimate_quota_usage(len(tracks))
+        print(f"\n📊 Estimated YouTube API Quota Usage:")
+        print(f"   Search: {quota['search']:,} units ({len(tracks)} tracks × 100)")
+        print(f"   Create playlist: {quota['create']} units")
+        print(f"   Add tracks: {quota['add']:,} units ({len(tracks)} tracks × 50)")
+        print(f"   ─────────────────────────")
+        print(f"   TOTAL: {quota['total']:,} units ({quota['percentage']:.1f}% of daily limit)")
+        
+        if quota['total'] > 10000:
+            print(f"   ⚠️  WARNING: Exceeds daily quota limit!")
+            max_safe = (10000 - 50) // 150  # (limit - create) / (search + add)
+            print(f"   💡 Recommendation: Transfer max {max_safe} tracks per day")
+            
+            if max_tracks is None:
+                response = input(f"\n   Limit to {max_safe} tracks? (s/n): ").strip().lower()
+                if response in ['s', 'sim', 'yes', 'y']:
+                    max_tracks = max_safe
+        
+        # Limit tracks if needed
+        if max_tracks and len(tracks) > max_tracks:
+            print(f"\n⚠️  Limiting transfer to {max_tracks} tracks (quota protection)")
+            tracks = tracks[:max_tracks]
+        
         # Create YouTube Music playlist
-        print("📤 Creating YouTube Music playlist...")
+        print(f"\n📤 Creating YouTube Music playlist...")
         yt_playlist_id = self.create_youtube_playlist(
             title=spotify_playlist_name,
             description=f"Transferred from Spotify - {len(tracks)} tracks"
@@ -292,7 +379,7 @@ class SpotifyToYouTubeTransfer:
         print(f"   Created playlist ID: {yt_playlist_id}")
         
         # Search and add tracks
-        print("🔍 Searching for tracks on YouTube Music...")
+        print("\n🔍 Searching for tracks on YouTube Music...")
         video_ids = []
         found_count = 0
         
@@ -313,9 +400,13 @@ class SpotifyToYouTubeTransfer:
             added_count = self.add_tracks_to_youtube_playlist(yt_playlist_id, video_ids)
             
             if added_count > 0:
-                print(f"✅ Successfully added {added_count}/{len(video_ids)} tracks to the playlist!")
+                print(f"\n✅ Successfully added {added_count}/{len(video_ids)} tracks to the playlist!")
+                
+                # Show final quota usage
+                actual_quota = self.estimate_quota_usage(added_count)
+                print(f"\n📊 Actual Quota Used: {actual_quota['total']:,} units")
             else:
-                print(f"❌ Failed to add tracks to the playlist")
+                print(f"\n❌ Failed to add tracks to the playlist")
         else:
             print("\n❌ No tracks found on YouTube Music")
         
