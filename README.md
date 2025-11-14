@@ -35,6 +35,32 @@ Este projeto implementa segurança de nível corporativo:
 
 ---
 
+## ⚡ Quick Start (Comece Agora!)
+
+### 🎯 Opção 1: Setup Automático com Wizard (RECOMENDADO!)
+
+```bash
+# 1. Clone ou baixe o projeto
+git clone https://github.com/GLFortes/SpotifyToYouTube.git
+cd SpotifyToYouTube
+
+# 2. Execute o wizard interativo
+python3 setup_wizard.py
+
+# 3. Siga as instruções (5 minutos!)
+```
+
+**O wizard faz automaticamente:**
+- ✅ Verifica Python
+- ✅ Cria ambiente virtual
+- ✅ Instala dependências
+- ✅ Pede credenciais Spotify/YouTube
+- ✅ Testa a conexão
+
+👉 **[Leia QUICK_START.md para mais detalhes](QUICK_START.md)**
+
+---
+
 ## 📋 Pré-requisitos
 
 ### 🐍 Python
@@ -50,6 +76,8 @@ Este projeto implementa segurança de nível corporativo:
 ---
 
 ## 🛠️ Setup do Ambiente
+
+### 🎯 Opção 2: Setup Manual (Se o wizard não funcionar)
 
 ### 1️⃣ Instalar Dependências do Sistema
 
@@ -106,6 +134,8 @@ pip install -r requirements.txt
 - `ytmusicapi` - Cliente YouTube Music API
 - `python-dotenv` - Gerenciamento de variáveis de ambiente
 - `google-auth` - Autenticação Google
+- `cryptography` - Criptografia de tokens
+- `keyring` - Integração com OS keyring
 
 ---
 
@@ -281,11 +311,13 @@ python3 security_manager.py
 ```
 Spotify to Youtube/
 ├── 📄 spotify_to_youtube.py      # Script principal de transferência
+├── 🎯 setup_wizard.py            # Wizard de configuração interativo (NOVO!)
 ├── 📄 continue_transfer.py       # Continuar transferência parcial
 ├── 📄 setup_youtube_oauth.py     # Setup OAuth com criptografia
 ├── 📄 setup_youtube_headers.py   # Setup alternativo (headers)
 ├── 🔒 security_manager.py        # Módulo de segurança enterprise
 ├── 📦 requirements.txt           # Dependências Python
+├── 📖 QUICK_START.md             # Guia rápido de início (NOVO!)
 ├── 🔐 .env                       # Credenciais Spotify (NÃO commitar!)
 ├── 🔐 .env.example               # Template de configuração
 ├── 🔐 youtube_token.enc          # Token OAuth criptografado (gerado)
